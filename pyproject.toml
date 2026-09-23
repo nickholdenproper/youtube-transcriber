@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yt-transcriber"
+version = "0.1.0"
+description = "YouTube transcriber with AI context analysis - timestamped transcripts plus summaries, chapters and actions performed, powered by Whisper + Ollama."
+requires-python = ">=3.10"
+dependencies = [
+    "yt-dlp",
+    "faster-whisper>=1.1.0",
+    "typer>=0.12",
+    "requests",
+    "python-dotenv",
+]
+
+[project.scripts]
+yt-transcribe = "yt_transcriber.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
