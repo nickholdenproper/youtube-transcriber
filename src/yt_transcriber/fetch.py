@@ -199,9 +199,13 @@ def download_audio(url: str, out_dir: Path, video_id: str) -> Path:
 
 
 def download_video(url: str, out_dir: Path, video_id: str) -> Path:
-    """Download a low-resolution MP4 for frame extraction (visual context)."""
+    """Download a video copy for frame extraction (visual context).
+
+    Capped at 720p MP4: crisp enough that on-screen text and UI are readable
+    in extracted frames, without pulling the full source stream.
+    """
     opts = {
-        "format": "bv*[height<=240][ext=mp4]/bv*[height<=360][ext=mp4]/b",
+        "format": "bv*[height<=720][ext=mp4]/bv*[height<=480][ext=mp4]/b",
         "outtmpl": str(out_dir / f"{video_id}.mp4"),
         "max_filesize": 250 * 1024 * 1024,
         "quiet": True,

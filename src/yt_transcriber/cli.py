@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import webbrowser
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import typer
 from dotenv import load_dotenv
@@ -64,13 +64,77 @@ def transcribe(
     vision_model: Optional[str] = typer.Option(
         None,
         "--vision-model",
-        help="Ollama vision model for frames: gemma4 (local) / gemma4:31b-cloud (cloud)",
+        help="Ollama vision model for frames: gemma4 (local) / gemma4:31b-cloud (cloud), "
+        "or free alternatives like qwen2.5-vl:7b, moondream2",
+    ),
+    vision_mode: str = typer.Option(
+        "per-frame",
+        "--vision-mode",
+        help="per-frame (each unique frame described, default), batch (up to "
+        "--batch-size frames per request), or mosaic (adaptive grid montages)",
     ),
     frame_interval: float = typer.Option(
-        30, "--frame-interval", help="Seconds between frames for visual analysis"
+        1, "--frame-interval", help="Seconds between frames for visual analysis (1 = one frame per second)"
     ),
     max_frames: int = typer.Option(
-        10, "--max-frames", help="Maximum number of frames to analyze"
+        600, "--max-frames", help="Maximum number of frames to analyze (long videos are down-sampled evenly)"
+    ),
+    vision_window: float = typer.Option(
+        30,
+        "--vision-window",
+        help="Group frame descriptions into N-second windows for summarization",
+    ),
+    dedupe: bool = typer.Option(
+        True,
+        "--dedupe/--no-dedupe",
+        help="Drop frames that barely change so cost tracks actual screen change (on by default)",
+    ),
+    dedupe_max_gap: float = typer.Option(
+        10,
+        "--dedupe-max-gap",
+        help="Never skip more than N seconds between kept frames, even if unchanged",
+    ),
+    batch_size: int = typer.Option(
+        8, "--batch-size", help="Images per request in batch mode (<=8 keeps timestamp binding safe)"
+    ),
+    mosaic_cells: Optional[int] = typer.Option(
+        None, "--mosaic-cells", help="Cells per grid in mosaic mode (auto if unset, max 144)"
+    ),
+    target_grids: int = typer.Option(
+        24, "--target-grids", help="Target number of vision calls; drives auto grid sizing"
+    ),
+    voice: bool = typer.Option(
+        True,
+        "--voice/--no-voice",
+        help="Analyze how the video sounds (pace, loudness, pauses) and add a "
+        "'How it sounds' section to the report (on by default; disable with --no-voice)",
+    ),
+    voice_window: float = typer.Option(
+        30,
+        "--voice-window",
+        help="Group voice measurements into N-second windows for summarization",
+    ),
+    vision_doubt: bool = typer.Option(
+        True,
+        "--vision-doubts/--no-vision-doubts",
+        help="Run the second, LLM-directed vision pass: re-capture exact frames at "
+        "timestamps the model flags as doubtful, then merge (on by default)",
+    ),
+    vision_fill_budget: int = typer.Option(
+        60,
+        "--vision-fill-budget",
+        help="Maximum doubt frames the second vision pass may capture",
+    ),
+    derive: List[str] = typer.Option(
+        [],
+        "--derive",
+        help="Rewrite the video digest into extra documents via a second LLM call: "
+        "how-to, article, faq, checklist, quiz (comma-separated)",
+    ),
+    derive_model: Optional[str] = typer.Option(
+        None,
+        "--derive-model",
+        help="Ollama model for the derived-document step (default: the main model)",
     ),
 ):
     """Transcribe a YouTube video and analyze its content."""
@@ -86,8 +150,21 @@ def transcribe(
         no_vad=no_vad,
         vision=vision,
         vision_model=vision_model,
+        vision_mode=vision_mode,
         frame_interval=frame_interval,
         max_frames=max_frames,
+        vision_window=vision_window,
+        dedupe=dedupe,
+        dedupe_max_gap=dedupe_max_gap,
+        batch_size=batch_size,
+        mosaic_cells=mosaic_cells,
+        target_grids=target_grids,
+        voice=voice,
+        voice_window=voice_window,
+        vision_doubt=vision_doubt,
+        vision_fill_budget=vision_fill_budget,
+        derive=derive,
+        derive_model=derive_model,
     )
 
     try:

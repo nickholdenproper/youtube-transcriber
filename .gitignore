@@ -15,6 +15,7 @@ output/
 *.vtt
 *.srt
 *.json3
+*.wav
 
 # local test artifacts / server process files
 output_tmp/
