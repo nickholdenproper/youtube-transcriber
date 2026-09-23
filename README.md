@@ -36,9 +36,22 @@ yt-transcribe "URL" --skip-context
 
 # Force local Whisper transcription (ignore captions)
 yt-transcribe "URL" --force-whisper --whisper-model small
+
+# Use local Ollama explicitly (even with an API key set)
+yt-transcribe "URL" --provider local
+
+# Music / ambient audio where silence detection hurts
+yt-transcribe "URL" --no-vad
 ```
 
-Outputs are written to `output/<video-id>/`.
+Outputs are written to `output/<video-id>/`:
+
+| File | Contents |
+| --- | --- |
+| `transcript.md` | Timestamped full transcript |
+| `transcript.json` | Structured transcript + video metadata |
+| `context.md` | AI context report (TL;DR, what happened, chapters, topics, quotes) |
+| `context.json` | Same report in structured form |
 
 ## Configuration
 
@@ -48,6 +61,9 @@ Outputs are written to `output/<video-id>/`.
 | `--provider` | `auto` | `auto` uses cloud if an API key is set, else local |
 | `--model` | cloud: `gpt-oss:20b-cloud`, local: `llama3.2` | Ollama model to use |
 | `--whisper-model` | `base` | faster-whisper model size (transcription fallback) |
+| `--device` | `cpu` | Whisper inference device (`cpu` or `cuda`) |
+| `--language` | unset | Whisper language hint (e.g. `en`, `es`) |
+| `--no-vad` | off | Disable voice-activity detection (music / ambient audio) |
 | `--skip-context` | off | Skip the AI context step |
 
 ## Branch workflow
