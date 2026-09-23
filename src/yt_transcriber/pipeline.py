@@ -34,7 +34,7 @@ class PipelineOptions:
     force_whisper: bool = False
     language: Optional[str] = None
     no_vad: bool = False
-    vision: bool = False
+    vision: bool = True
     vision_model: Optional[str] = None
     frame_interval: float = 30
     max_frames: int = 10
@@ -58,11 +58,19 @@ def run_pipeline(
     url: str,
     opts: PipelineOptions,
     log: Optional[Callable[[str], None]] = None,
+    on_progress: Optional[Callable[[float, str], None]] = None,
 ) -> PipelineResult:
-    """Run the full transcriber pipeline and return everything."""
+    """Run the full transcriber pipeline and return everything.
+
+    ``log`` receives human-readable status lines. ``on_progress`` receives
+    ``(percent 0-100, stage label)`` at well-defined points so UIs can render
+    a live progress bar.
+    """
     emitter = log if log is not None else lambda msg: None
+    report = on_progress if on_progress is not None else lambda pct, stage: None
     work_dir = Path(opts.out)
 
+    report(4, "Fetching video info")
     emitter(f"Fetching video info: {url}")
     result = fetch_video(url, work_dir, force_whisper=opts.force_whisper)
     meta = result.meta
@@ -74,6 +82,7 @@ def run_pipeline(
     warnings = list(result.warnings)
 
     if not segments and result.audio_path:
+        report(30, "Transcribing audio with whisper")
         emitter(f"Transcribing audio with whisper ({opts.whisper_model}, {opts.device}) ...")
         tr = transcribe(
             result.audio_path,
@@ -83,7 +92,10 @@ def run_pipeline(
             vad_filter=not opts.no_vad,
         )
         segments = tr["segments"]
+        report(58, "Transcription complete")
         emitter(f"  Got {len(segments)} segments ({tr['language']})")
+    else:
+        report(30, "Captions downloaded")
 
     if not segments:
         raise RuntimeError("No transcript could be produced for this video.")
@@ -101,6 +113,7 @@ def run_pipeline(
                 if vision_client.is_cloud
                 else DEFAULT_VISION_MODEL
             )
+            report(62, f"Analyzing video frames ({vision_model})")
             emitter(f"Visual context: {vision_model} ...")
             visual_timeline = build_visual_timeline(
                 url,
@@ -112,6 +125,7 @@ def run_pipeline(
                 max_frames=opts.max_frames,
                 on_log=emitter,
             )
+            report(74, "Frames described")
             emitter(f"  Got {len(visual_timeline)} frame descriptions")
         except VisionError as exc:
             warnings.append(str(exc))
@@ -119,12 +133,15 @@ def run_pipeline(
         except Exception as exc:  # noqa: BLE001 - never break the transcript for vision
             warnings.append(f"Visual context skipped: {exc}")
             emitter(f"Visual context skipped: {exc}")
+    else:
+        report(62, "Skipping visual analysis")
 
     if not opts.skip_context:
         try:
             client = resolve_client(opts.provider)
             if opts.model:
                 client.model = opts.model
+            report(76, f"Analyzing context with {client.model}")
             emitter(
                 f"Analyzing context with {client.model} "
                 f"({'cloud' if client.is_cloud else 'local'}) ..."
@@ -138,13 +155,17 @@ def run_pipeline(
             )
             context_report = analysis["report"]
             context_chunks = analysis["chunks"]
+            report(92, "Context analysis complete")
         except ContextError as exc:
             warnings.append(str(exc))
             emitter(f"Context step skipped: {exc}")
         except Exception as exc:  # noqa: BLE001 - keep transcript on any context failure
             warnings.append(f"Context step skipped (unexpected): {exc}")
             emitter(f"Context step skipped: {exc}")
+    else:
+        report(92, "Context skipped")
 
+    report(95, "Writing output files")
     out_dir = work_dir / meta.id
     written = write_outputs(
         out_dir,
@@ -156,6 +177,7 @@ def run_pipeline(
         visual_timeline,
     )
 
+    report(100, "Done")
     return PipelineResult(
         video_id=meta.id,
         meta=meta,

@@ -35,8 +35,8 @@ ALLOWED_FILES = {"transcript.md", "transcript.json", "context.md", "context.json
 MAX_CONCURRENT_JOBS = 2
 
 app = FastAPI(
-    title="yt-transcriber API",
-    version="0.2.0",
+    title="YT Transcriber API",
+    version="0.3.0",
     description="Transcribe YouTube videos and get an AI context report of what happened.",
 )
 
@@ -58,7 +58,7 @@ class PipelineOptionsModel(BaseModel):
     force_whisper: bool = False
     language: Optional[str] = None
     no_vad: bool = False
-    vision: bool = False
+    vision: bool = True
     vision_model: Optional[str] = None
     frame_interval: float = 30
     max_frames: int = 10
@@ -76,6 +76,8 @@ class Job:
         self.opts = opts
         self.status = "pending"  # pending / running / done / error
         self.created = datetime.now(timezone.utc).isoformat()
+        self.progress: float = 0.0
+        self.stage: str = "Queued"
         self.log: list[str] = []
         self.result: Optional[dict] = None
         self.error: Optional[str] = None
@@ -86,6 +88,8 @@ class Job:
             "url": self.url,
             "status": self.status,
             "created": self.created,
+            "progress": self.progress,
+            "stage": self.stage,
             "log": list(self.log),
             "result": self.result,
             "error": self.error,
@@ -128,10 +132,17 @@ def _result_to_dict(res: PipelineResult) -> dict:
 
 
 def _run_job(job: Job) -> None:
+    def on_log(msg: str) -> None:
+        job.log.append(msg)
+
+    def on_progress(pct: float, stage: str) -> None:
+        job.progress = round(pct)
+        job.stage = stage
+
     _jobs_slots.acquire()  # blocks until a slot is free
     try:
         job.status = "running"
-        result = run_pipeline(job.url, job.opts, log=lambda msg: job.log.append(msg))
+        result = run_pipeline(job.url, job.opts, log=on_log, on_progress=on_progress)
         job.result = _result_to_dict(result)
         job.status = "done"
     except Exception as exc:  # noqa: BLE001 - job boundary

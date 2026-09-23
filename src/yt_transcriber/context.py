@@ -32,59 +32,76 @@ DEFAULT_CLOUD_VISION_MODEL = "gemma4:31b-cloud"
 LOCAL_BASE_URL = "http://localhost:11434"
 CLOUD_BASE_URL = "https://ollama.com"
 
-CHUNK_PROMPT = """You are a meticulous analyst examining a segment of a video transcript \
-(from {start} to {end} seconds). The transcript may be imperfect speech-to-text.
+CHUNK_PROMPT = """You are a meticulous forensic analyst building an EXHAUSTIVE record of a \
+segment of a YouTube video (from {start} to {end} seconds). The transcript may be imperfect \
+speech-to-text - infer intended meaning, but never invent facts.
 
+Write with enough detail that a reader could follow along without watching the video. \
 Reply with exactly these Markdown sections:
 
 ## CHAPTER
 A short descriptive title for this portion, like a YouTube chapter name.
 
 ## WHAT HAPPENED
-Concise bullet points describing what the speaker(s) said or did in this segment. \
-Preserve concrete details: names, tools, decisions, numbers, order of actions.
+An exhaustive bullet-by-bullet account of EVERY event in this segment, in order: exactly what \
+the speaker says, every action they take, every step they show, every tool / site / number / \
+name they mention, every decision. Use one idea per bullet, each starting with a timestamp from \
+the segment (e.g. "00:12 - "). Write as many bullets as the content needs (10-30+) - never \
+summarise away concrete details.
 
 ## QUOTES
-Up to 3 short notable quotes taken verbatim from the transcript if possible.
+Up to 5 short notable quotes taken verbatim from the transcript when possible.
 
 Transcript segment:
 {chunk}"""
 
 VISUAL_PREFIX = """
 VISUAL CONTEXT for this time window (observations from video frames by a vision
-model - use them to describe what is visibly happening, but treat uncertain
-details carefully):
+model - describe what is visibly happening and include these in WHAT HAPPENED,
+but treat uncertain details carefully):
 {visual}"""
 
-FRAME_PROMPT = """Look at this video frame and describe what is happening on screen.
-Focus on: actions the person(s) are doing, visible tools / screens / objects /
-text, who is present, and anything important for understanding the video.
-Reply in 1-2 short sentences."""
+FRAME_PROMPT = """Describe this video frame in great detail: who or what is present, the setting \
+and background, peoples' appearance and actions, any on-screen text or UI (type out exact names, \
+labels and numbers you can read), and objects. Capture everything that helps a viewer understand \
+the video without watching it. Reply in 2-4 detailed sentences."""
 
-SYNTH_PROMPT = """Combine these per-segment analyses of a YouTube video into one complete \
-context report written in Markdown. The video is titled "{title}" by {channel}.
+SYNTH_PROMPT = """You are compiling the definitive, exhaustive written record of the YouTube \
+video titled "{title}" by {channel}. Combine the per-segment analyses below into one complete \
+Markdown report so detailed that a reader who never watched the video understands EVERYTHING: \
+every action, every step executed, every on-screen element, every decision, every number, every \
+name. Never drop concrete details.
 
-Your report must contain exactly these sections:
+Your report MUST contain exactly these sections:
 
 # TL;DR
-2-3 sentences summarizing what the whole video is about and its main takeaway.
+3-5 sentences: what the video is about, who is in it, and its main takeaway.
 
 # What happened
-An ordered narrative of what the person(s) actually did across the video: actions taken, \
-things built or shown, decisions made, topics covered. Write it for someone who has not \
-watched the video. Add approximate timestamps where helpful (e.g. "around 3:20").
+An exhaustive, chronological account of the whole video. Use bullet points with timestamps \
+(e.g. "- 01:23 - Clicked 'Verify and start earning')") describing every action taken, every step \
+performed, everything shown or built, every decision made, and every topic covered. This is the \
+core of the report - make it as long and detailed as the video's content deserves.
+
+# What the video shows
+A vivid description of what appears ON SCREEN, using the visual observations below (scenes, \
+people and objects, on-screen text/UI, actions visible but not spoken). Bullet points with \
+timestamps. If visual observations are empty, write "No visual observations were captured."
 
 # Chapters
 Markdown bullets: `- MM:SS - Chapter title`
 
 # Key topics, people and tools
-Short markdown bullets.
+Every topic, person, tool, website and term that matters, as short bullets.
 
 # Key quotes
 Short bullets, each with a rough timestamp when possible.
 
 Segment analyses:
-{analyses}"""
+{analyses}
+
+Visual observations by timestamp:
+{visual}"""
 
 
 class ContextError(Exception):
@@ -286,8 +303,11 @@ def analyze(
     """Run chunked map-reduce analysis and return the report + intermediate results.
 
     ``visual_timeline`` is an optional list of ``{"ts": float, "description": str}``
-    entries describing what the camera shows; overlapping frames are pasted into
-    each chunk so the report can describe visual actions too.
+    entries describing what the camera shows. Overlapping frames are pasted into
+    each chunk and the full timeline is fed to the final synthesis, which adds
+    a dedicated "What the video shows" section so on-screen actions are never
+    lost. A deterministic per-frame section is appended as a fallback if the
+    model did not already include one.
     """
     if not segments:
         raise ContextError("Nothing to analyze: the transcript is empty.")
@@ -323,10 +343,25 @@ def analyze(
         f"[Segment {i}, ~{fmt_ts(c['start'])}:]\n{c['analysis']}"
         for i, c in enumerate(chunk_results, start=1)
     )
-    synth_prompt = SYNTH_PROMPT.format(title=title, channel=channel, analyses=analyses_blob)
-    report = client.complete([{"role": "user", "content": synth_prompt}])
+    if timeline:
+        visual_blob = "\n".join(
+            f"- {fmt_ts(v['ts'])} - {v['description']}" for v in timeline
+        )
+    else:
+        visual_blob = "None - no video frames were analyzed."
+    synth_prompt = SYNTH_PROMPT.format(
+        title=title, channel=channel, analyses=analyses_blob, visual=visual_blob
+    )
+    report = client.complete([{"role": "user", "content": synth_prompt}]).strip()
 
-    return {"report": report.strip(), "chunks": chunk_results, "n_chunks": len(chunks)}
+    if timeline and "# What the video shows" not in report:
+        fallback = (
+            "\n\n# What the video shows (frame analysis)\n"
+            + "\n".join(f"- **{fmt_ts(v['ts'])}** - {v['description']}" for v in timeline)
+        )
+        report += fallback
+
+    return {"report": report, "chunks": chunk_results, "n_chunks": len(chunks)}
 
 
 def find_ollama_url() -> bool:

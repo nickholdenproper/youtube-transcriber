@@ -56,9 +56,10 @@ def transcribe(
         help="Disable voice-activity detection (helps with music / ambient audio)",
     ),
     vision: bool = typer.Option(
-        False,
-        "--vision",
-        help="Also analyze video frames so the report includes on-screen actions",
+        True,
+        "--vision/--no-vision",
+        help="Analyze video frames so the report includes on-screen actions "
+        "(on by default; disable with --no-vision)",
     ),
     vision_model: Optional[str] = typer.Option(
         None,

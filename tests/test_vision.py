@@ -26,13 +26,17 @@ def _segs():
     ]
 
 
+def _is_synth(prompt):
+    return "Segment analyses:" in prompt
+
+
 class TestVisionInjection(unittest.TestCase):
     def test_visual_notes_pasted_into_matching_chunk(self):
         client = FakeClient()
         timeline = [{"ts": 5.0, "description": "Host greets the camera"},
                     {"ts": 120.0, "description": "Host clicks a button"}]
         analyze(_segs(), client, visual_timeline=timeline)
-        chunk_prompts = [c for c, _ in client.prompts if not c.startswith("Combine these")]
+        chunk_prompts = [c for c, _ in client.prompts if not _is_synth(c)]
         self.assertEqual(len(chunk_prompts), 1)  # single chunk
         prompt = chunk_prompts[0]
         self.assertIn("VISUAL CONTEXT", prompt)
@@ -42,17 +46,33 @@ class TestVisionInjection(unittest.TestCase):
     def test_no_visual_section_without_timeline(self):
         client = FakeClient()
         analyze(_segs(), client)
-        chunk_prompts = [c for c, _ in client.prompts if not c.startswith("Combine these")]
+        chunk_prompts = [c for c, _ in client.prompts if not _is_synth(c)]
         self.assertNotIn("VISUAL CONTEXT", chunk_prompts[0])
+
+    def test_report_gets_guaranteed_visual_section(self):
+        client = FakeClient()
+        timeline = [{"ts": 5.0, "description": "A red button labeled START fills the screen"},
+                    {"ts": 60.0, "description": "The host clicks the button"}]
+        result = analyze(_segs(), client, visual_timeline=timeline)
+        self.assertIn("# What the video shows", result["report"])
+        self.assertIn("red button labeled START", result["report"])
+
+    def test_full_timeline_fed_to_synthesis(self):
+        client = FakeClient()
+        timeline = [{"ts": 5.0, "description": "User lands on the dashboard"}]
+        analyze(_segs(), client, visual_timeline=timeline)
+        synth = [c for c, _ in client.prompts if _is_synth(c)]
+        self.assertEqual(len(synth), 1)
+        self.assertIn("User lands on the dashboard", synth[0])
 
     def test_vision_client_requests_images(self):
         with tempfile.TemporaryDirectory() as tmp:
             img = Path(tmp) / "f.jpg"
             img.write_bytes(b"\xff\xd8\xff\xe0fakejpeg")
-            client = OllamaClient(base_url="http://localhost:11434", model="llama3.2-vision")
+            client = OllamaClient(base_url="http://localhost:11434", model="gemma4")
             # The real network call must not run; assert payload shape via a
             # patched transport is overkill - here we just verify the API contract.
-            self.assertEqual(client.model, "llama3.2-vision")
+            self.assertEqual(client.model, "gemma4")
             self.assertFalse(client.is_cloud)
 
 

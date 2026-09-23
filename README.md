@@ -5,7 +5,7 @@ YouTube transcriber with **AI context** — turns any video into a timestamped t
 Three interfaces, one shared pipeline:
 
 - **CLI** — `yt-transcribe "URL"`
-- **Local GUI** — double-click `run.bat`, use it in the browser
+- **Local GUI** — double-click `run.bat`, use it in the browser (live progress bar + step log)
 - **REST API** — build it into news sites, editors, RSS readers, anything
 
 ## How it works
@@ -13,7 +13,7 @@ Three interfaces, one shared pipeline:
 1. **Fetch** — `yt-dlp` grabs video metadata and, when available, the existing captions (manual → auto). Captions-first means most videos get a transcript in seconds. If captions are missing *or* YouTube rate-limits them (HTTP 429), the pipeline retries with backoff and then falls back to downloading audio and transcribing locally — a caption error never blocks the run.
 2. **Transcribe** — no captions? Audio is downloaded and transcribed locally with `faster-whisper`.
 3. **Context** — the transcript is analyzed by Ollama (cloud API by default, local Ollama as fallback) using chunked map-reduce, so long videos stay safe.
-   **Visual context (optional)** — what the camera *shows* (demos, slides, on-screen text, body language) that the audio never mentions. Controlled by `--vision`: the low-res video is downloaded, frames are extracted with ffmpeg and described by a vision model (`gemma4` locally, `gemma4:31b-cloud` on Ollama Cloud), and those descriptions are injected into the analysis.
+   **Visual context (on by default)** — what the camera *shows* (demos, slides, on-screen text/UI, body language) that the audio never mentions. A low-res copy of the video is downloaded, frames are extracted with ffmpeg and described by a vision model (`gemma4` locally, `gemma4:31b-cloud` on Ollama Cloud), then merged with the transcript into one report with a dedicated **What the video shows** section. Disable with `--no-vision`.
 4. **Output** — Markdown + JSON files for the transcript and the context report.
 
 ## Requirements
@@ -21,7 +21,7 @@ Three interfaces, one shared pipeline:
 - Python 3.10+
 - ffmpeg (for the audio fallback + visual frame extraction)
 - An Ollama account + API key for cloud analysis (free tier) — or local Ollama running
-- **For `--vision` with local Ollama**: pull a vision model first — `ollama pull gemma4`. With an API key set, cloud vision (`gemma4:31b-cloud`) works with no local model needed.
+- **For local vision**: pull a vision model first — `ollama pull gemma4`. With an API key set, cloud vision (`gemma4:31b-cloud`) works with no local model needed.
 
 ## Quick start (Windows)
 
@@ -53,9 +53,11 @@ yt-transcribe "URL" --provider local
 # Music / ambient audio where silence detection hurts
 yt-transcribe "URL" --no-vad
 
-# Visual context: analyze video frames with a vision model
-# (cloud: gemma4:31b-cloud, local: gemma4)
-yt-transcribe "URL" --vision --vision-model gemma4:31b-cloud --frame-interval 30 --max-frames 10
+# Detailed frame analysis (more frames = more detail)
+yt-transcribe "URL" --frame-interval 15 --max-frames 20
+
+# Skip visual/frame analysis (audio + captions only)
+yt-transcribe "URL" --no-vision
 
 # Start the GUI + API server
 yt-transcribe serve --open
@@ -103,7 +105,7 @@ Outputs are written to `output/<video-id>/`:
 | --- | --- |
 | `transcript.md` | Timestamped full transcript |
 | `transcript.json` | Structured transcript + video metadata |
-| `context.md` | AI context report (TL;DR, what happened, chapters, topics, quotes) |
+| `context.md` | AI context report (TL;DR, what happened, what the video shows, chapters, topics, quotes) |
 | `context.json` | Same report in structured form |
 
 ## Configuration
@@ -120,7 +122,7 @@ Outputs are written to `output/<video-id>/`:
 | `--device` | `cpu` | Whisper inference device (`cpu` or `cuda`) |
 | `--language` | unset | Whisper language hint (e.g. `en`, `es`) |
 | `--no-vad` | off | Disable voice-activity detection (music / ambient audio) |
-| `--vision` | off | Also analyze video frames so the report covers on-screen actions |
+| `--vision/--no-vision` | on | Analyze video frames so the report includes on-screen actions |
 | `--vision-model` | `gemma4` (local) / `gemma4:31b-cloud` (cloud) | Vision model for frame analysis |
 | `--frame-interval` | `30` | Seconds between extracted frames |
 | `--max-frames` | `10` | Maximum number of frames to analyze |
@@ -139,6 +141,7 @@ main ───▓ feature/scaffold
         ▓ feature/context
         ▓ feature/polish
         ▓ feature/api
+        ▓ feature/ui
 ```
 
 ## Troubleshooting
@@ -146,6 +149,5 @@ main ───▓ feature/scaffold
 - **YouTube blocks yt-dlp** — update `yt-dlp` (`pip install -U yt-dlp`); if needed, pass cookies via `.env`.
 - **Local Ollama** — run `ollama serve`, then `ollama pull llama3.2`.
 - **Vision step skipped** — local mode: pull the model first (`ollama pull gemma4`); cloud mode: make sure the model is a vision-capable `:cloud` model like `gemma4:31b-cloud`.
-- **Context step skipped** — no API key and no local Ollama running; transcript still works.
 - **Context step skipped** — no API key and no local Ollama running; transcript still works.
 - **Server won't start (port busy)** — `yt-transcribe serve --port 8001`.
