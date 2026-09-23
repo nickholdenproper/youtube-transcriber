@@ -19,7 +19,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,15 +28,31 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .pipeline import PipelineOptions, PipelineResult, run_pipeline
+from .tools import list_tools
 
 STATIC_DIR = Path(__file__).parent / "static"
 OUTPUT_DIR = Path(os.getenv("YT_TRANSCRIBER_OUT", "output"))
-ALLOWED_FILES = {"transcript.md", "transcript.json", "context.md", "context.json"}
+ALLOWED_FILES = {
+    "transcript.md",
+    "transcript.json",
+    "context.md",
+    "context.json",
+    "visual_frames.json",
+    "voice_analysis.json",
+}
+
+
+def _is_allowed(filename: str) -> bool:
+    if filename in ALLOWED_FILES:
+        return True
+    return (
+        filename.startswith("visual_") and filename.endswith(".png")
+    ) or filename.startswith("doubt_") and filename.endswith(".jpg")
 MAX_CONCURRENT_JOBS = 2
 
 app = FastAPI(
     title="YT Transcriber API",
-    version="0.3.0",
+    version="0.4.0",
     description="Transcribe YouTube videos and get an AI context report of what happened.",
 )
 
@@ -60,8 +76,27 @@ class PipelineOptionsModel(BaseModel):
     no_vad: bool = False
     vision: bool = True
     vision_model: Optional[str] = None
-    frame_interval: float = 30
-    max_frames: int = 10
+    vision_mode: str = "per-frame"
+    frame_interval: float = 1
+    max_frames: int = 600
+    vision_window: float = 30
+    dedupe: bool = True
+    dedupe_max_gap: float = 10
+    batch_size: int = 8
+    mosaic_cells: Optional[int] = None
+    target_grids: int = 24
+    voice: bool = True
+    voice_window: float = 30
+    vision_doubt: bool = True
+    vision_fill_budget: int = 60
+    derive: List[str] = Field(
+        default_factory=list,
+        description="Rewrite the context digest into extra documents via a second "
+        "LLM call: how-to, article, faq, checklist, quiz",
+    )
+    derive_model: Optional[str] = Field(
+        default=None, description="Ollama model for the derived-document step"
+    )
 
 
 class TranscribeRequest(BaseModel):
@@ -120,6 +155,11 @@ def _result_to_dict(res: PipelineResult) -> dict:
         "context_report": res.context_report,
         "context_chunks": res.context_chunks,
         "visual_timeline": res.visual_timeline,
+        "visual_frames": res.visual_frames,
+        "voice_notes": res.voice_notes,
+        "voice_analysis": res.voice_analysis,
+        "vision_fill": res.vision_fill,
+        "derived": res.derived,
         "files": [
             {
                 "name": path.name,
@@ -180,6 +220,11 @@ def create_job(req: TranscribeRequest) -> dict:
     return {"job_id": job.id, "status": job.status}
 
 
+@app.get("/v1/tools", summary="List available analysis tools")
+def tools() -> list[dict]:
+    return list_tools()
+
+
 @app.get("/v1/jobs/{job_id}", summary="Get job status and result")
 def get_job(job_id: str) -> dict:
     with _jobs_lock:
@@ -214,7 +259,9 @@ def list_results() -> list[dict]:
                     "date": meta.get("upload_date"),
                     "files": [
                         {"name": f, "url": f"/v1/results/{video_dir.name}/{f}"}
-                        for f in sorted(p.name for p in video_dir.iterdir() if p.name in ALLOWED_FILES)
+                        for f in sorted(
+                            p.name for p in video_dir.iterdir() if _is_allowed(p.name)
+                        )
                     ],
                 }
             )
@@ -224,7 +271,7 @@ def list_results() -> list[dict]:
 
 @app.get("/v1/results/{video_id}/{filename}", summary="Download a saved output file")
 def get_result_file(video_id: str, filename: str) -> FileResponse:
-    if filename not in ALLOWED_FILES:
+    if not _is_allowed(filename):
         raise HTTPException(status_code=400, detail="Unrecognised filename")
     path = OUTPUT_DIR / video_id / filename
     if not path.is_file():

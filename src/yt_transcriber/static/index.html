@@ -159,7 +159,43 @@
       <label><input type="checkbox" id="force_whisper"> force whisper</label>
       <label><input type="checkbox" id="no_vad"> no VAD</label>
       <label><input type="checkbox" id="vision" checked> visual context (video frames)</label>
+      <label><input type="checkbox" id="voice" checked> voice analysis (pacing & energy)</label>
+      <label><input type="checkbox" id="vision_doubt" checked> resolve visual doubts</label>
       <label><input type="checkbox" id="skip_context"> skip context</label>
+    </div>
+
+    <div class="opts">
+      <label class="fld">vision mode
+        <select id="vision_mode">
+          <option value="per-frame">per-frame (full detail, default)</option>
+          <option value="batch">batch (<=8 frames/request, faster)</option>
+          <option value="mosaic">mosaic (grids, cheap overview)</option>
+        </select>
+      </label>
+      <label class="fld">frame interval (s)
+        <input id="frame_interval" type="number" min="0.1" step="0.1" value="1" size="5" title="Seconds between frames; 1 = one frame per second of video">
+      </label>
+      <label class="fld">max frames
+        <input id="max_frames" type="number" min="1" step="1" value="600" size="5" title="Largest number of frames to analyze; longer videos are down-sampled evenly">
+      </label>
+      <label class="fld">dedupe max gap (s)
+        <input id="dedupe_max_gap" type="number" min="1" step="1" value="10" size="5" title="Never skip more than this many seconds between kept frames, even if unchanged">
+      </label>
+      <label class="fld">window (s)
+        <input id="vision_window" type="number" min="1" step="1" value="30" size="5" title="Group frame descriptions into this many seconds per summary window">
+      </label>
+      <label class="fld">batch size
+        <input id="batch_size" type="number" min="1" max="8" step="1" value="8" size="4" title="Images per request in batch mode (8 max keeps timestamps reliable)">
+      </label>
+      <label class="fld">mosaic cells
+        <input id="mosaic_cells" placeholder="auto" size="5" title="Cells per grid in mosaic mode; empty = auto (max 144)">
+      </label>
+      <label class="fld">target calls
+        <input id="target_grids" type="number" min="1" step="1" value="24" size="4" title="Target number of vision calls; drives auto grid sizing">
+      </label>
+      <label class="fld">doubt fill budget
+        <input id="vision_fill_budget" type="number" min="1" step="1" value="60" size="4" title="Maximum frames the second vision pass may capture at doubtful timestamps">
+      </label>
     </div>
 
     <div class="actions">
@@ -219,8 +255,19 @@ function options() {
     skip_context: chk("skip_context"),
     vision: chk("vision"),
     vision_model: null,
-    frame_interval: 30,
-    max_frames: 10
+    vision_mode: $id("vision_mode").value,
+    frame_interval: parseFloat($id("frame_interval").value) || 1,
+    max_frames: parseInt($id("max_frames").value, 10) || 600,
+    vision_window: parseFloat($id("vision_window").value) || 30,
+    dedupe: true,
+    dedupe_max_gap: parseFloat($id("dedupe_max_gap").value) || 10,
+    batch_size: parseInt($id("batch_size").value, 10) || 8,
+    mosaic_cells: (function(){ var v = $id("mosaic_cells").value.trim(); return v ? (parseInt(v,10)||null) : null; })(),
+    target_grids: parseInt($id("target_grids").value, 10) || 24,
+    voice: chk("voice"),
+    voice_window: 30,
+    vision_doubt: chk("vision_doubt"),
+    vision_fill_budget: parseInt($id("vision_fill_budget").value, 10) || 60
   };
 }
 
@@ -362,7 +409,9 @@ function render(res) {
 
   let vis = "";
   if (res.visual_timeline && res.visual_timeline.length) {
-    vis = '<div class="vistim">Visual observations:' +
+    const nFrames = (res.visual_frames && res.visual_frames.length) || 0;
+    vis = '<div class="vistim">Visual observations (' +
+      nFrames + " frames packed into " + res.visual_timeline.length + " window summaries):" +
       res.visual_timeline.map(v =>
         '<div class="v-row"><span class="v-ts">' + fmt(v.ts) + "</span> \u2014 " + esc(v.description) + "</div>")
       .join("") + "</div>";
