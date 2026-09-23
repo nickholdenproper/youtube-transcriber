@@ -1,16 +1,29 @@
-MIT License
+Free-to-Use License (FUL) 1.0
 
 Copyright (c) 2026 nickholdenproper
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+of this software and associated documentation files (the "Software"), to use,
+copy, modify, merge and distribute the Software without restriction, subject
+to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+2. The Software may NOT be sold, licensed for a fee, or otherwise monetized
+   as a standalone product — i.e. you may not distribute the Software itself,
+   or a derivative of it, as a paid application, service or subscription where
+   the Software (or the transcription/analysis functionality it provides) is
+   the primary or sole thing the user pays for.
+
+3. The Software MAY be used, for free, as a component or dependency of any
+   other product or service, including commercial ones — you may build apps,
+   websites, tools, media pipelines or hosted services with or around it and
+   charge for that product, as long as the Software itself is not what is
+   being sold.
+
+4. You MAY modify and improve the Software, and you MAY redistribute your
+   modified versions under these same terms.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,

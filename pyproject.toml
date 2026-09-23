@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "yt-transcriber"
 version = "0.4.0"
 description = "YouTube transcriber with AI context analysis - timestamped transcripts plus summaries, chapters and actions performed, powered by Whisper + Ollama."
-license = { text = "MIT" }
+license = { text = "Free-to-Use License 1.0 - see LICENSE (free to use/modify; not for standalone resale)" }
 requires-python = ">=3.10"
 dependencies = [
     "yt-dlp",
