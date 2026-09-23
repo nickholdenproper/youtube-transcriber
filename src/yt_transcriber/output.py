@@ -35,6 +35,7 @@ def write_outputs(
     source: str,
     context_report: Optional[str] = None,
     context_chunks: Optional[list[dict]] = None,
+    visual_timeline: Optional[list[dict]] = None,
 ) -> list[Path]:
     """Write all output files and return the list of created paths."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -59,6 +60,7 @@ def write_outputs(
             "meta": asdict(meta),
             "report": context_report,
             "chunks": context_chunks or [],
+            "visual_timeline": visual_timeline or [],
         }
         context_json.write_text(
             json.dumps(ctx_payload, indent=2, ensure_ascii=False), encoding="utf-8"

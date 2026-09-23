@@ -15,3 +15,9 @@ output/
 *.vtt
 *.srt
 *.json3
+
+# local test artifacts / server process files
+output_tmp/
+server.log
+server.err
+server.pid
