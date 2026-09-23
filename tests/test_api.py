@@ -18,7 +18,14 @@ class TestApi(unittest.TestCase):
     def test_index_serves_gui(self):
         r = client.get("/")
         self.assertEqual(r.status_code, 200)
-        self.assertIn("yt-transcriber", r.text)
+        self.assertIn("YT Transcriber", r.text)
+
+    def test_create_job_reports_progress_shape(self):
+        r = client.post("/v1/jobs", json={"url": "https://youtube.com/watch?v=abc"})
+        self.assertEqual(r.status_code, 200)
+        job = client.get(f"/v1/jobs/{r.json()['job_id']}").json()
+        self.assertIn("progress", job)
+        self.assertIn("stage", job)
 
     def test_job_requires_url(self):
         r = client.post("/v1/jobs", json={"options": {}})

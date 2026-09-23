@@ -3,44 +3,92 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>yt-transcriber</title>
+<title>YT Transcriber</title>
 <style>
   :root {
-    --bg: #0f1117; --panel: #171a23; --panel2: #1e2230; --line: #2a2f42;
-    --text: #e6e8ee; --muted: #9aa1b5; --accent: #e8475f; --ok: #3ddc97;
-    --mono: "Cascadia Code", Consolas, monospace;
+    --bg: #0b0d13; --panel: #141824; --panel2: #1b2130; --line: #262d42;
+    --text: #e9ecf4; --muted: #98a0b8; --accent: #ff4d5e; --accent2: #ff8a5c;
+    --ok: #3ddc97; --warn: #ffc65c; --err: #ff5d6c;
+    --mono: "Cascadia Code", "SF Mono", Consolas, monospace;
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
-         font: 15px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
-  header { padding: 22px 32px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-  header h1 { font-size: 20px; margin: 0; } header h1 span { color: var(--accent); }
-  header p { margin: 0; color: var(--muted); font-size: 13px; }
-  main { max-width: 980px; margin: 0 auto; padding: 26px 24px 80px; }
+         font: 15px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif;
+         background-image:
+           radial-gradient(900px 300px at 15% -10%, rgba(255,77,94,.08), transparent),
+           radial-gradient(800px 260px at 85% -10%, rgba(255,138,92,.06), transparent); }
+  a { color: var(--accent2); }
 
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  header { padding: 20px 32px; border-bottom: 1px solid var(--line);
+           display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+           position: sticky; top: 0; background: rgba(11,13,19,.85); backdrop-filter: blur(8px); z-index: 5; }
+  .logo { font-size: 22px; font-weight: 800; letter-spacing: .2px; }
+  .logo .t { background: linear-gradient(90deg, var(--accent), var(--accent2));
+             -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .logo .yt { color: var(--text); }
+  header .sub { color: var(--muted); font-size: 13px; }
+  #pill { margin-left: auto; font-size: 12px; font-weight: 700; letter-spacing: .4px;
+          text-transform: uppercase; padding: 6px 12px; border-radius: 999px;
+          border: 1px solid var(--line); color: var(--muted); background: var(--panel); }
+  #pill.running { color: var(--accent2); border-color: var(--accent2); }
+  #pill.done    { color: var(--ok);    border-color: var(--ok); }
+  #pill.error   { color: var(--err);   border-color: var(--err); }
+
+  main { max-width: 980px; margin: 0 auto; padding: 26px 24px 90px; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px;
+          box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+  #url { width: 100%; font-family: var(--mono); background: var(--panel2); color: var(--text);
+         border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 14px; }
+  #url:focus, input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .opts { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; align-items: flex-end; }
   .fld { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; }
   input[type=text], select {
     background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-    border-radius: 8px; padding: 9px 11px; font-size: 14px;
-  }
-  #url { width: 100%; font-family: var(--mono); background: var(--panel2); color: var(--text);
-         border: 1px solid var(--line); border-radius: 8px; padding: 11px; font-size: 14px; }
-  .opts { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; align-items: flex-end; }
+    border-radius: 8px; padding: 9px 11px; font-size: 14px; }
   .checks { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
   .checks label { flex-direction: row; align-items: center; gap: 7px; font-size: 13px; color: var(--text); cursor: pointer; }
   .checks input { accent-color: var(--accent); }
-  button { background: var(--accent); color: #fff; border: 0; border-radius: 8px;
-           padding: 11px 22px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  button { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #fff; border: 0;
+           border-radius: 10px; padding: 12px 26px; font-size: 15px; font-weight: 700; cursor: pointer;
+           transition: filter .15s, transform .05s; }
+  button:hover:not(:disabled) { filter: brightness(1.1); }
+  button:active:not(:disabled) { transform: translateY(1px); }
   button:disabled { opacity: .5; cursor: not-allowed; }
   button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
-  .actions { margin-top: 16px; display: flex; gap: 10px; }
+  .actions { margin-top: 16px; display: flex; gap: 10px; align-items: center; }
 
-  #log { font-family: var(--mono); font-size: 12.5px; padding: 12px; height: 150px;
-         overflow-y: auto; white-space: pre-wrap; margin-top: 14px; color: var(--muted);
-         background: #0b0d12; border: 1px solid var(--line); border-radius: 8px; }
-  #log .ok { color: var(--ok); } #log .err { color: var(--accent); }
-  .hidden { display: none; }
+  /* progress */
+  #progress { margin-top: 16px; display: none; }
+  #progress.visible { display: block; animation: fadein .25s ease; }
+  .prog-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+  #stage { color: var(--text); font-weight: 600; }
+  #pct { color: var(--accent2); font-weight: 800; font-family: var(--mono); }
+  .bar { margin-top: 8px; height: 12px; background: var(--panel2); border: 1px solid var(--line);
+         border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; width: 0%; border-radius: 999px;
+              background: linear-gradient(90deg, var(--accent), var(--accent2));
+              transition: width .45s ease; }
+  .bar-fill.done { background: linear-gradient(90deg, var(--ok), #37b98a); }
+  .bar-fill.error { background: var(--err); }
+  .bar-fill.stripes { background-image:
+        repeating-linear-gradient(45deg, rgba(255,255,255,.15) 0 8px, transparent 8px 16px);
+        animation: slide 1s linear infinite; }
+  @keyframes slide { to { background-position: 22px 0; } }
+  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+  /* log */
+  #logWrap { margin-top: 16px; display: none; }
+  #logWrap.visible { display: block; animation: fadein .25s ease; }
+  #log { font-family: var(--mono); font-size: 12.5px; padding: 12px 14px; height: 220px;
+         overflow-y: auto; white-space: pre-wrap; color: var(--muted);
+         background: #090b10; border: 1px solid var(--line); border-radius: 10px; cursor: text; }
+  .log-time { color: #3b4358; margin-right: 8px; }
+  .log-ok  { color: var(--ok); }
+  .log-err { color: var(--err); }
+  .log-warn { color: var(--warn); }
+  .log-info { color: var(--text); }
+  #logScroll { user-select: none; }
 
   .tabs { display: flex; gap: 4px; margin-top: 22px; border-bottom: 1px solid var(--line); }
   .tab { background: none; border: 0; color: var(--muted); padding: 10px 16px; font-size: 14px;
@@ -50,10 +98,17 @@
   #result { background: var(--panel); border: 1px solid var(--line); border-radius: 0 0 12px 12px; padding: 18px; min-height: 180px; }
   #result .meta { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
   #result h2 { font-size: 17px; margin: 6px 0 4px; }
-  #result h3 { color: var(--accent); font-size: 14px; margin: 18px 0 4px; }
+  #result h3 { color: var(--accent2); font-size: 14px; margin: 18px 0 4px; }
   #result ul { margin: 6px 0 6px 20px; padding: 0; }
   #result p  { margin: 6px 0; }
   #result .line { font-family: var(--mono); font-size: 13px; padding: 3px 0; border-bottom: 1px solid #20243a; }
+  #result pre { font-family: var(--mono); font-size: 12px; overflow-x: auto; }
+  .warnbox { margin-top: 12px; padding: 10px 12px; border: 1px solid rgba(255,198,92,.4);
+             background: rgba(255,198,92,.08); border-radius: 8px; color: var(--warn); font-size: 13px; }
+  .vistim { margin-top: 12px; font-size: 13px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 10px; }
+  .vistim .v-row { font-family: var(--mono); font-size: 12px; padding: 2px 0; }
+  .vistim .v-ts { color: var(--accent2); }
+
   .dl { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
   .dl a { color: var(--accent); text-decoration: none; font-size: 13px; border: 1px solid var(--line);
           border-radius: 6px; padding: 6px 10px; } .dl a:hover { background: var(--panel2); }
@@ -64,12 +119,14 @@
                 padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between;
                 align-items: center; gap: 10px; flex-wrap: wrap; }
   #results li .t { font-weight: 600; } #results li .c { color: var(--muted); font-size: 13px; }
+  .hidden { display: none; }
 </style>
 </head>
 <body>
 <header>
-  <h1>yt-transcriber <span>local GUI</span></h1>
-  <p>YouTube transcript + AI context report of what happened in the video</p>
+  <div class="logo"><span class="yt">YT</span> <span class="t">Transcriber</span></div>
+  <div class="sub">Transcript + AI context report of what happened in the video</div>
+  <span id="pill">Idle</span>
 </header>
 
 <main>
@@ -89,8 +146,8 @@
       </label>
       <label class="fld">whisper model
         <select id="whisper_model">
-          <option>base</option><option>small</option><option>medium</option>
-          <option>large-v3</option><option>tiny</option>
+          <option>base</option><option>tiny</option><option>small</option>
+          <option>medium</option><option>large-v3</option>
         </select>
       </label>
       <label class="fld">language
@@ -101,7 +158,7 @@
     <div class="checks">
       <label><input type="checkbox" id="force_whisper"> force whisper</label>
       <label><input type="checkbox" id="no_vad"> no VAD</label>
-      <label><input type="checkbox" id="vision"> visual context <span style="color:var(--muted)">(needs local vision model)</span></label>
+      <label><input type="checkbox" id="vision" checked> visual context (video frames)</label>
       <label><input type="checkbox" id="skip_context"> skip context</label>
     </div>
 
@@ -110,7 +167,17 @@
       <button class="ghost" onclick="loadResults()">Refresh results</button>
     </div>
 
-    <div id="log" class="hidden"></div>
+    <div id="progress">
+      <div class="prog-top">
+        <span id="stage">Starting... </span>
+        <span id="pct">0%</span>
+      </div>
+      <div class="bar"><div class="bar-fill stripes" id="barFill"></div></div>
+    </div>
+
+    <div id="logWrap">
+      <div id="log"><span id="logScroll">Ready. Paste a YouTube URL and hit Transcribe.</span></div>
+    </div>
   </div>
 
   <div class="tabs">
@@ -134,13 +201,15 @@
 
 <script>
 let jobTimer = null;
-let currentTab = "transcript";
+let sawLog = false;
+
+const $id = id => document.getElementById(id);
 
 function options() {
-  const val = id => document.getElementById(id).value.trim();
-  const chk = id => document.getElementById(id).checked;
+  const val = id => $id(id).value.trim();
+  const chk = id => $id(id).checked;
   return {
-    provider: document.getElementById("provider").value,
+    provider: $id("provider").value,
     model: val("model") || null,
     whisper_model: val("whisper_model"),
     language: val("language") || null,
@@ -155,45 +224,124 @@ function options() {
   };
 }
 
-function log(msg, cls) {
-  const el = document.getElementById("log");
-  el.classList.remove("hidden");
-  if (cls) el.insertAdjacentHTML("beforeend", '<span class="' + cls + '">' + msg + "</span>");
-  else el.appendChild(document.createTextNode(msg));
+function ts() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2, "0") + ":" +
+         String(d.getMinutes()).padStart(2, "0") + ":" +
+         String(d.getSeconds()).padStart(2, "0");
+}
+
+function logLine(msg) {
+  const el = $id("log");
+  const box = $id("logWrap");
+  box.classList.add("visible");
+  if (!sawLog) {
+    $id("logScroll").remove();
+    sawLog = true;
+  }
+  const line = document.createElement("div");
+  const time = document.createElement("span");
+  time.className = "log-time";
+  time.textContent = ts();
+  line.appendChild(time);
+  const text = document.createElement("span");
+  text.textContent = msg;
+  const cls = /(Error|failed)/i.test(msg) ? "log-err"
+             : /(skipped|unavailable|unable)/i.test(msg) ? "log-warn"
+             : /(Done|Wrote|Got|Source:|Captions)/i.test(msg) ? "log-ok"
+             : "log-info";
+  text.className = cls;
+  line.appendChild(text);
+  el.appendChild(line);
   el.scrollTop = el.scrollHeight;
 }
 
+function setProgress(pct, stage, cls) {
+  $id("progress").classList.add("visible");
+  $id("barFill").style.width = Math.min(100, Math.max(0, pct)) + "%";
+  $id("stage").textContent = stage;
+  $id("pct").textContent = pct + "%";
+  if (cls) { $id("barFill").className = "bar-fill " + cls; }
+}
+
+function pill(text, cls) {
+  const p = $id("pill");
+  p.textContent = text;
+  p.className = cls ? cls : "";
+}
+
 function start() {
-  const url = document.getElementById("url").value.trim();
+  const url = $id("url").value.trim();
   if (!url) { alert("Paste a YouTube URL first."); return; }
-  document.getElementById("log").textContent = "";
-  document.getElementById("run").disabled = true;
+  sawLog = false;
+  $id("log").innerHTML = '<span id="logScroll"></span>';
+  $id("run").disabled = true;
+  $id("barFill").className = "bar-fill stripes";
+  pill("Working", "running");
+  setProgress(0, "Queued... ", "");
+  logLine("Submitting job...");
   fetch("/v1/jobs", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url: url, options: options() })
   }).then(r => r.json()).then(job => poll(job.job_id))
-    .catch(e => { log("Error: " + e + "\n", "err"); document.getElementById("run").disabled = false; });
+    .catch(e => {
+      tooltipErr("Error: " + e);
+    });
+}
+
+function tooltipErr(msg) {
+  pill("Error", "error");
+  logLine(msg);
+  setProgress(100, "Error", "error");
+  $id("run").disabled = false;
 }
 
 function poll(id) {
   if (jobTimer) clearInterval(jobTimer);
   jobTimer = setInterval(() => {
     fetch("/v1/jobs/" + id).then(r => r.json()).then(job => {
-      document.getElementById("log").textContent = job.log.join("\n");
+      setProgress(job.progress, job.status === "running" ? job.stage : job.stage, "");
+      if (job.status === "pending") return;
+      if (job.status === "running" && job.log.length) {
+        const joined = job.log.join("\n");
+        syncLog(joined);
+      }
       if (job.status === "done") {
         clearInterval(jobTimer);
-        document.getElementById("run").disabled = false;
-        log("\nDone.\n", "ok");
+        pill("Done", "done");
+        setProgress(100, "Done", "done");
+        syncLog(job.log.join("\n"));
+        logLine("Done.");
         render(job.result);
         loadResults();
+        $id("run").disabled = false;
       } else if (job.status === "error") {
         clearInterval(jobTimer);
-        document.getElementById("run").disabled = false;
-        log("\nError: " + (job.error || "unknown") + "\n", "err");
+        tooltipErr("Error: " + (job.error || "unknown"));
+        $id("run").disabled = false;
       }
-    });
-  }, 1500);
+    }).catch(e => tooltipErr("Polling error: " + e));
+  }, 700);
+}
+
+function syncLog(raw) {
+  const lines = raw.split("\n");
+  $id("log").innerHTML = "";
+  lines.forEach(l => {
+    const div = document.createElement("div");
+    const text = document.createElement("span");
+    text.textContent = l;
+    const cls = /(Error|failed)/i.test(l) ? "log-err"
+                : /(skipped|unavailable|unable)/i.test(l) ? "log-warn"
+                : /(Done|Wrote|Got|Source:|Captions)/i.test(l) ? "log-ok"
+                : "log-info";
+    text.className = cls;
+    div.appendChild(text);
+    $id("log").appendChild(div);
+  });
+  $id("logWrap").classList.add("visible");
+  $id("log").scrollTop = $id("log").scrollHeight;
 }
 
 function fmt(s) {
@@ -202,26 +350,57 @@ function fmt(s) {
 }
 
 function render(res) {
-  const meta = document.getElementById("meta");
+  const meta = $id("meta");
   meta.classList.remove("hidden");
   meta.textContent = res.meta.title + " \u2014 " + res.meta.channel +
-    "  \u00b7  source: " + res.source + "  \u00b7  " + res.segments.length + " segments";
+    "   \u00b7   source: " + res.source + "   \u00b7   " + res.segments.length + " segments";
 
-  document.getElementById("pane-transcript").innerHTML =
-    res.segments.map(s => '<div class="line">[<b>' + fmt(s.start) + "</b>] " + esc(s.text) + "</div>").join("");
+  let warns = "";
+  if (res.warnings && res.warnings.length) {
+    warns = '<div class="warnbox">' + res.warnings.map(w => "! " + esc(w)).join("<br>") + "</div>";
+  }
 
-  document.getElementById("pane-context").innerHTML =
-    markdown(res.context_report || "_(no context report \u2014 it was skipped or failed)_");
+  let vis = "";
+  if (res.visual_timeline && res.visual_timeline.length) {
+    vis = '<div class="vistim">Visual observations:' +
+      res.visual_timeline.map(v =>
+        '<div class="v-row"><span class="v-ts">' + fmt(v.ts) + "</span> \u2014 " + esc(v.description) + "</div>")
+      .join("") + "</div>";
+  }
 
-  document.getElementById("pane-json").innerHTML =
+  $id("pane-transcript").innerHTML =
+    res.segments.map(s => '<div class="line">[<b>' + fmt(s.start) + "</b>] " + esc(s.text) + "</div>").join("") + warns;
+
+  $id("pane-context").innerHTML =
+    markdown(res.context_report || "_(no context report \u2014 it was skipped or failed)_") + vis + warns;
+
+  $id("pane-json").innerHTML =
     "<pre>" + esc(JSON.stringify(res, null, 2)) + "</pre>";
 
-  const dl = document.getElementById("dl");
+  const dl = $id("dl");
   dl.classList.remove("hidden");
   dl.innerHTML = (res.files || []).map(f =>
     '<a href="' + f.url + '">download ' + f.name + "</a>").join("");
 
   showTab("context");
+}
+
+function renderResults(list) {
+  const ul = $id("resultsList");
+  ul.innerHTML = "";
+  if (!list.length) { ul.innerHTML = "<li><span class=c>No results yet.</span></li>"; return; }
+  list.forEach(r => {
+    const li = document.createElement("li");
+    const t = document.createElement("span");
+    t.className = "t";
+    t.textContent = r.title || r.video_id;
+    const c = document.createElement("span");
+    c.className = "c";
+    c.textContent = (r.channel || "") + " \u00b7 " + r.video_id;
+    li.appendChild(t);
+    li.appendChild(c);
+    ul.appendChild(li);
+  });
 }
 
 function markdown(md) {
@@ -241,30 +420,20 @@ function markdown(md) {
   return html;
 }
 function bold(s) { return s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"); }
-function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 
 function showTab(name) {
-  currentTab = name;
   document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-  document.getElementById("tab" + name[0].toUpperCase() + name.slice(1)).classList.add("active");
+  $id("tab" + name[0].toUpperCase() + name.slice(1)).classList.add("active");
   ["transcript", "context", "json"].forEach(p =>
-    document.getElementById("pane-" + p).classList.toggle("hidden", p !== name));
+    $id("pane-" + p).classList.toggle("hidden", p !== name));
 }
 
 function loadResults() {
-  fetch("/v1/results").then(r => r.json()).then(list => {
-    const ul = document.getElementById("resultsList");
-    ul.innerHTML = "";
-    if (!list.length) { ul.innerHTML = "<li><span class=c>No results yet.</span></li>"; return; }
-    list.forEach(r => {
-      const li = document.createElement("li");
-      li.innerHTML = "<span class=t>" + esc(r.title || r.video_id) + "</span>" +
-        "<span class=c>" + esc(r.channel || "") + " \u00b7 " + r.video_id + "</span>";
-      ul.appendChild(li);
-    });
-  });
+  fetch("/v1/results").then(r => r.json()).then(renderResults).catch(() => {});
 }
 
+$id("url").addEventListener("keydown", e => { if (e.key === "Enter") start(); });
 loadResults();
 </script>
 </body>
