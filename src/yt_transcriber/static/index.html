@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yt-transcriber</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #171a23; --panel2: #1e2230; --line: #2a2f42;
+    --text: #e6e8ee; --muted: #9aa1b5; --accent: #e8475f; --ok: #3ddc97;
+    --mono: "Cascadia Code", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.55 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 22px 32px; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 20px; margin: 0; } header h1 span { color: var(--accent); }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  main { max-width: 980px; margin: 0 auto; padding: 26px 24px 80px; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .fld { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; }
+  input[type=text], select {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 11px; font-size: 14px;
+  }
+  #url { width: 100%; font-family: var(--mono); background: var(--panel2); color: var(--text);
+         border: 1px solid var(--line); border-radius: 8px; padding: 11px; font-size: 14px; }
+  .opts { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px; align-items: flex-end; }
+  .checks { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+  .checks label { flex-direction: row; align-items: center; gap: 7px; font-size: 13px; color: var(--text); cursor: pointer; }
+  .checks input { accent-color: var(--accent); }
+  button { background: var(--accent); color: #fff; border: 0; border-radius: 8px;
+           padding: 11px 22px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+  .actions { margin-top: 16px; display: flex; gap: 10px; }
+
+  #log { font-family: var(--mono); font-size: 12.5px; padding: 12px; height: 150px;
+         overflow-y: auto; white-space: pre-wrap; margin-top: 14px; color: var(--muted);
+         background: #0b0d12; border: 1px solid var(--line); border-radius: 8px; }
+  #log .ok { color: var(--ok); } #log .err { color: var(--accent); }
+  .hidden { display: none; }
+
+  .tabs { display: flex; gap: 4px; margin-top: 22px; border-bottom: 1px solid var(--line); }
+  .tab { background: none; border: 0; color: var(--muted); padding: 10px 16px; font-size: 14px;
+         cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  #result { background: var(--panel); border: 1px solid var(--line); border-radius: 0 0 12px 12px; padding: 18px; min-height: 180px; }
+  #result .meta { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  #result h2 { font-size: 17px; margin: 6px 0 4px; }
+  #result h3 { color: var(--accent); font-size: 14px; margin: 18px 0 4px; }
+  #result ul { margin: 6px 0 6px 20px; padding: 0; }
+  #result p  { margin: 6px 0; }
+  #result .line { font-family: var(--mono); font-size: 13px; padding: 3px 0; border-bottom: 1px solid #20243a; }
+  .dl { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .dl a { color: var(--accent); text-decoration: none; font-size: 13px; border: 1px solid var(--line);
+          border-radius: 6px; padding: 6px 10px; } .dl a:hover { background: var(--panel2); }
+
+  #results h3 { color: var(--muted); margin-top: 30px; }
+  #results ul { list-style: none; padding: 0; margin: 8px 0 0; }
+  #results li { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+                padding: 10px 14px; margin-bottom: 8px; display: flex; justify-content: space-between;
+                align-items: center; gap: 10px; flex-wrap: wrap; }
+  #results li .t { font-weight: 600; } #results li .c { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>yt-transcriber <span>local GUI</span></h1>
+  <p>YouTube transcript + AI context report of what happened in the video</p>
+</header>
+
+<main>
+  <div class="card">
+    <input id="url" placeholder="https://www.youtube.com/watch?v=..." autofocus>
+
+    <div class="opts">
+      <label class="fld">provider
+        <select id="provider">
+          <option value="auto">auto (cloud if key set)</option>
+          <option value="cloud">cloud</option>
+          <option value="local">local</option>
+        </select>
+      </label>
+      <label class="fld">ollama model
+        <input id="model" placeholder="default" style="min-width:170px">
+      </label>
+      <label class="fld">whisper model
+        <select id="whisper_model">
+          <option>base</option><option>small</option><option>medium</option>
+          <option>large-v3</option><option>tiny</option>
+        </select>
+      </label>
+      <label class="fld">language
+        <input id="language" placeholder="auto" size="6">
+      </label>
+    </div>
+
+    <div class="checks">
+      <label><input type="checkbox" id="force_whisper"> force whisper</label>
+      <label><input type="checkbox" id="no_vad"> no VAD</label>
+      <label><input type="checkbox" id="vision"> visual context <span style="color:var(--muted)">(needs local vision model)</span></label>
+      <label><input type="checkbox" id="skip_context"> skip context</label>
+    </div>
+
+    <div class="actions">
+      <button id="run" onclick="start()">Transcribe</button>
+      <button class="ghost" onclick="loadResults()">Refresh results</button>
+    </div>
+
+    <div id="log" class="hidden"></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" id="tabTranscript" onclick="showTab('transcript')">Transcript</button>
+    <button class="tab" id="tabContext" onclick="showTab('context')">Context</button>
+    <button class="tab" id="tabJson" onclick="showTab('json')">JSON</button>
+  </div>
+  <div id="result">
+    <div class="meta hidden" id="meta"></div>
+    <div id="pane-transcript"></div>
+    <div id="pane-context" class="hidden"></div>
+    <div id="pane-json" class="hidden"></div>
+    <div class="dl hidden" id="dl"></div>
+  </div>
+
+  <div id="results">
+    <h3>Previous results</h3>
+    <ul id="resultsList"></ul>
+  </div>
+</main>
+
+<script>
+let jobTimer = null;
+let currentTab = "transcript";
+
+function options() {
+  const val = id => document.getElementById(id).value.trim();
+  const chk = id => document.getElementById(id).checked;
+  return {
+    provider: document.getElementById("provider").value,
+    model: val("model") || null,
+    whisper_model: val("whisper_model"),
+    language: val("language") || null,
+    device: "cpu",
+    force_whisper: chk("force_whisper"),
+    no_vad: chk("no_vad"),
+    skip_context: chk("skip_context"),
+    vision: chk("vision"),
+    vision_model: null,
+    frame_interval: 30,
+    max_frames: 10
+  };
+}
+
+function log(msg, cls) {
+  const el = document.getElementById("log");
+  el.classList.remove("hidden");
+  if (cls) el.insertAdjacentHTML("beforeend", '<span class="' + cls + '">' + msg + "</span>");
+  else el.appendChild(document.createTextNode(msg));
+  el.scrollTop = el.scrollHeight;
+}
+
+function start() {
+  const url = document.getElementById("url").value.trim();
+  if (!url) { alert("Paste a YouTube URL first."); return; }
+  document.getElementById("log").textContent = "";
+  document.getElementById("run").disabled = true;
+  fetch("/v1/jobs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: url, options: options() })
+  }).then(r => r.json()).then(job => poll(job.job_id))
+    .catch(e => { log("Error: " + e + "\n", "err"); document.getElementById("run").disabled = false; });
+}
+
+function poll(id) {
+  if (jobTimer) clearInterval(jobTimer);
+  jobTimer = setInterval(() => {
+    fetch("/v1/jobs/" + id).then(r => r.json()).then(job => {
+      document.getElementById("log").textContent = job.log.join("\n");
+      if (job.status === "done") {
+        clearInterval(jobTimer);
+        document.getElementById("run").disabled = false;
+        log("\nDone.\n", "ok");
+        render(job.result);
+        loadResults();
+      } else if (job.status === "error") {
+        clearInterval(jobTimer);
+        document.getElementById("run").disabled = false;
+        log("\nError: " + (job.error || "unknown") + "\n", "err");
+      }
+    });
+  }, 1500);
+}
+
+function fmt(s) {
+  const sec = Math.max(0, Math.floor(s));
+  return String(Math.floor(sec / 60)).padStart(2, "0") + ":" + String(sec % 60).padStart(2, "0");
+}
+
+function render(res) {
+  const meta = document.getElementById("meta");
+  meta.classList.remove("hidden");
+  meta.textContent = res.meta.title + " \u2014 " + res.meta.channel +
+    "  \u00b7  source: " + res.source + "  \u00b7  " + res.segments.length + " segments";
+
+  document.getElementById("pane-transcript").innerHTML =
+    res.segments.map(s => '<div class="line">[<b>' + fmt(s.start) + "</b>] " + esc(s.text) + "</div>").join("");
+
+  document.getElementById("pane-context").innerHTML =
+    markdown(res.context_report || "_(no context report \u2014 it was skipped or failed)_");
+
+  document.getElementById("pane-json").innerHTML =
+    "<pre>" + esc(JSON.stringify(res, null, 2)) + "</pre>";
+
+  const dl = document.getElementById("dl");
+  dl.classList.remove("hidden");
+  dl.innerHTML = (res.files || []).map(f =>
+    '<a href="' + f.url + '">download ' + f.name + "</a>").join("");
+
+  showTab("context");
+}
+
+function markdown(md) {
+  let html = "", list = [];
+  for (const raw of md.split(/\r?\n/)) {
+    const line = raw.trimEnd();
+    const escLine = esc(line);
+    if (/^# /.test(line)) html += "<h2>" + esc(line.slice(2)) + "</h2>";
+    else if (/^## /.test(line)) html += "<h3>" + esc(line.slice(3)) + "</h3>";
+    else if (/^- /.test(line)) list.push("<li>" + esc(line.slice(2)) + "</li>");
+    else {
+      if (list.length) { html += "<ul>" + list.join("") + "</ul>"; list = []; }
+      if (line) html += "<p>" + bold(escLine) + "</p>";
+    }
+  }
+  if (list.length) html += "<ul>" + list.join("") + "</ul>";
+  return html;
+}
+function bold(s) { return s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"); }
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+function showTab(name) {
+  currentTab = name;
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  document.getElementById("tab" + name[0].toUpperCase() + name.slice(1)).classList.add("active");
+  ["transcript", "context", "json"].forEach(p =>
+    document.getElementById("pane-" + p).classList.toggle("hidden", p !== name));
+}
+
+function loadResults() {
+  fetch("/v1/results").then(r => r.json()).then(list => {
+    const ul = document.getElementById("resultsList");
+    ul.innerHTML = "";
+    if (!list.length) { ul.innerHTML = "<li><span class=c>No results yet.</span></li>"; return; }
+    list.forEach(r => {
+      const li = document.createElement("li");
+      li.innerHTML = "<span class=t>" + esc(r.title || r.video_id) + "</span>" +
+        "<span class=c>" + esc(r.channel || "") + " \u00b7 " + r.video_id + "</span>";
+      ul.appendChild(li);
+    });
+  });
+}
+
+loadResults();
+</script>
+</body>
+</html>

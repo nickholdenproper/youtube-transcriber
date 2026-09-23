@@ -6,11 +6,14 @@ video metadata plus either:
 * timestamped caption segments (manual subtitles preferred, then automatic
   captions), or
 * a downloaded audio file ready for local Whisper transcription.
+
+Video frames for visual context are also downloaded low-res here.
 """
 
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -86,8 +89,19 @@ def pick_caption(info: dict) -> Optional[tuple[str, str]]:
     return None
 
 
-def download_captions(url: str, out_dir: Path, video_id: str, lang: str, automatic: bool) -> Path:
-    """Download one caption track with yt-dlp and return the VTT file path."""
+def download_captions(
+    url: str,
+    out_dir: Path,
+    video_id: str,
+    lang: str,
+    automatic: bool,
+    attempts: int = 3,
+    backoff: tuple = (3, 6, 12),
+) -> Path:
+    """Download one caption track with yt-dlp and return the VTT file path.
+
+    Retries with backoff on transient errors (rate limits etc).
+    """
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -101,13 +115,23 @@ def download_captions(url: str, out_dir: Path, video_id: str, lang: str, automat
     else:
         opts["writesubtitles"] = True
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.download([url])
+    last_error: Optional[str] = None
+    for attempt in range(attempts):
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.download([url])
+            candidates = sorted(out_dir.glob(f"{video_id}.*.vtt"))
+            if candidates:
+                return candidates[0]
+            last_error = f"no VTT file produced for lang '{lang}'"
+        except yt_dlp.utils.DownloadError as exc:
+            last_error = str(exc)
+        if attempt < attempts - 1:
+            time.sleep(backoff[min(attempt, len(backoff) - 1)])
 
-    candidates = sorted(out_dir.glob(f"{video_id}.*.vtt"))
-    if not candidates:
-        raise FetchError(f"Caption download produced no VTT file for lang '{lang}'")
-    return candidates[0]
+    raise FetchError(
+        f"Caption download failed after {attempts} attempts: {last_error}"
+    )
 
 
 def _to_seconds(ts: str) -> float:
@@ -174,29 +198,65 @@ def download_audio(url: str, out_dir: Path, video_id: str) -> Path:
     return mp3
 
 
+def download_video(url: str, out_dir: Path, video_id: str) -> Path:
+    """Download a low-resolution MP4 for frame extraction (visual context)."""
+    opts = {
+        "format": "bv*[height<=240][ext=mp4]/bv*[height<=360][ext=mp4]/b",
+        "outtmpl": str(out_dir / f"{video_id}.mp4"),
+        "max_filesize": 250 * 1024 * 1024,
+        "quiet": True,
+        "no_warnings": True,
+    }
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+    except yt_dlp.utils.DownloadError as exc:
+        raise FetchError(f"Video download failed: {exc}") from exc
+
+    mp4 = out_dir / f"{video_id}.mp4"
+    if not mp4.exists():
+        raise FetchError(
+            "Video download produced no file. The video may not offer an MP4 format."
+        )
+    return mp4
+
+
 def fetch_video(url: str, work_dir: Path, force_whisper: bool = False) -> FetchResult:
     """Fetch a YouTube video: captions first, audio file as fallback."""
     info = extract_info(url)
     meta = _to_meta(info)
     out_dir = Path(work_dir) / meta.id
     out_dir.mkdir(parents=True, exist_ok=True)
+    warnings: list[str] = []
 
     if not force_whisper:
         chosen = pick_caption(info)
         if chosen is not None:
             section, lang = chosen
             try:
-                captions_path = download_captions(url, out_dir, meta.id, lang, automatic=(section == "automatic_captions"))
-                segments = parse_vtt(captions_path.read_text(encoding="utf-8", errors="replace"))
+                captions_path = download_captions(
+                    url, out_dir, meta.id, lang, automatic=(section == "automatic_captions")
+                )
+                segments = parse_vtt(
+                    captions_path.read_text(encoding="utf-8", errors="replace")
+                )
                 if segments:
                     return FetchResult(
                         meta=meta,
                         segments=segments,
                         source="captions",
                         captions_path=captions_path,
+                        warnings=warnings,
                     )
+                warnings.append("Caption track existed but contained no usable text.")
             except FetchError as exc:
-                return FetchResult(meta=meta, segments=[], source="audio", warnings=[str(exc)])
+                warnings.append(f"Captions unavailable ({exc}) - falling back to audio.")
 
     audio_path = download_audio(url, out_dir, meta.id)
-    return FetchResult(meta=meta, segments=[], source="audio", audio_path=audio_path)
+    return FetchResult(
+        meta=meta,
+        segments=[],
+        source="audio",
+        audio_path=audio_path,
+        warnings=warnings,
+    )
