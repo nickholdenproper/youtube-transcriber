@@ -8,6 +8,10 @@ Three interfaces, one shared pipeline:
 - **Local GUI** — double-click `run.bat`, use it in the browser (live progress bar + step log)
 - **REST API** — build it into news sites, editors, RSS readers, anything
 
+<p align="center">
+  <a href='https://ko-fi.com/B4I827USQY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+</p>
+
 ## How it works
 
 1. **Fetch** — `yt-dlp` grabs video metadata and, when available, the existing captions (manual → auto). Captions-first means most videos get a transcript in seconds. If captions are missing *or* YouTube rate-limits them (HTTP 429), the pipeline retries with backoff and then falls back to downloading audio and transcribing locally — a caption error never blocks the run.
@@ -235,3 +239,12 @@ main ───▓ feature/scaffold
 - **Voice step skipped** — needs ffmpeg (for `ebur128`/`silencedetect`); the warning in the log explains why.
 - **Context step skipped** — no API key and no local Ollama running; transcript still works.
 - **Server won't start (port busy)** — `yt-transcribe serve --port 8001`.
+
+## Support
+
+Free to use, and it stays that way. If it saved you time, you can support it
+here:
+
+<a href='https://ko-fi.com/B4I827USQY' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+
+No feature is gated behind a donation.
